@@ -28,18 +28,99 @@ import { useAutoTTS } from "@/hooks/use-auto-tts"
 export default function WeatherPage() {
   const { speakPageTitle, speakOnHover, speakButtonAction, autoTTSEnabled } = useAutoTTS()
 
-  const [currentWeather, setCurrentWeather] = useState({
-    location: "Ludhiana, Punjab",
-    temperature: 28,
-    condition: "Partly Cloudy",
-    humidity: 65,
-    windSpeed: 12,
-    pressure: 1013,
-    visibility: 10,
-    uvIndex: 6,
-    rainfall: 2.5,
-    feelsLike: 31,
-  })
+    const { language } = useLanguage()
+    const { translate } = useTranslation(language)
+
+    const [city, setCity] = useState("Ludhiana")
+    const [currentWeather, setCurrentWeather] = useState<any>(null)
+    const [forecast, setForecast] = useState<any[]>([])
+    const [alerts, setAlerts] = useState<any[]>([])
+    const [farmingAdvice, setFarmingAdvice] = useState<any[]>([])
+    const [loading, setLoading] = useState(false)
+    const [error, setError] = useState<string | null>(null)
+
+    // Fetch weather data
+    useEffect(() => {
+      async function fetchWeather() {
+        setLoading(true)
+        setError(null)
+        try {
+          const res = await fetch(`/api/weather?city=${encodeURIComponent(city)}`)
+          const data = await res.json()
+          setCurrentWeather({
+            location: `${data.location.name}, ${data.location.country}`,
+            temperature: data.current.temperature,
+            condition: data.current.description,
+            humidity: data.current.humidity,
+            windSpeed: data.current.windSpeed,
+            pressure: data.current.pressure,
+            visibility: data.current.visibility,
+            uvIndex: data.current.uvIndex,
+            rainfall: data.current.cloudiness,
+            feelsLike: data.current.feelsLike,
+          })
+          setFarmingAdvice([
+            {
+              activity: "Irrigation",
+              recommendation: data.farming.irrigationAdvice,
+              priority: "high",
+              timing: "Today",
+            },
+            {
+              activity: "Pest Risk",
+              recommendation: data.farming.pestRisk,
+              priority: "medium",
+              timing: "Today",
+            },
+            {
+              activity: "Field Work",
+              recommendation: data.farming.fieldWorkSuitability,
+              priority: "low",
+              timing: "Today",
+            },
+          ])
+        } catch (err: any) {
+          setError("Failed to fetch weather data")
+        }
+        setLoading(false)
+      }
+      fetchWeather()
+    }, [city])
+
+    // Fetch forecast data
+    useEffect(() => {
+      async function fetchForecast() {
+        try {
+          const res = await fetch(`/api/weather/forecast?city=${encodeURIComponent(city)}`)
+          const data = await res.json()
+          setForecast(
+            data.forecast.map((day: any) => ({
+              date: day.date,
+              day: new Date(day.date).toLocaleDateString("en-US", { weekday: "short" }),
+              high: day.temperature.max,
+              low: day.temperature.min,
+              condition: day.description,
+              icon: day.icon,
+              precipitation: day.rainfall,
+              humidity: day.humidity,
+            }))
+          )
+          setAlerts(
+            data.farmingInsights.map((insight: any, idx: number) => ({
+              id: idx + 1,
+              type: insight.type,
+              title: insight.type,
+              message: insight.message,
+              severity: insight.priority,
+              validUntil: "-"
+            }))
+          )
+        } catch (err) {
+          // ignore
+        }
+      }
+      fetchForecast()
+    }, [city])
 
   const [forecast, setForecast] = useState([
     {
